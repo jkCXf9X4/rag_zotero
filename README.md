@@ -34,6 +34,16 @@ Point at your Zotero `storage/` directory (example paths):
 rag-zotero index --storage-dir "$HOME/Zotero/storage"
 ```
 
+#### Optional: enrich results with Zotero metadata (recommended)
+
+Export your library from Zotero as JSON (either Zotero JSON or Better BibTeX JSON), then pass it in:
+
+```bash
+rag-zotero index --storage-dir "$HOME/Zotero/storage" --export-json "$HOME/Zotero/lib-export.json"
+```
+
+This will store metadata like `title`, `creators`, `year`, `doi`, and `citekey` (if present) alongside each chunk and show it in `query`.
+
 ### 4) Query
 
 ```bash

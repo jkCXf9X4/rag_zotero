@@ -5,13 +5,22 @@ import sys
 
 import typer
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
 
 from .config import load_config
 from .embeddings import resolve_embeddings
-from .indexer import index_files
+from .indexer import index_file
 from .vectorstore import get_collection, query_collection
 from .zotero_scan import scan_storage
+from .zotero_export import attachment_key_from_storage_path, load_zotero_export
 
 
 app = typer.Typer(no_args_is_help=True)
@@ -61,17 +70,42 @@ def doctor(
 def scan(
     storage_dir: str = typer.Option(..., help="Path to Zotero storage/ folder"),
     limit: int = typer.Option(50, help="Max files to print"),
+    export_json: str | None = typer.Option(
+        None, help="Path to Zotero/BetterBibTeX JSON export for metadata"
+    ),
 ) -> None:
-    files = scan_storage(_as_path(storage_dir) or Path(storage_dir))
+    storage_path = _as_path(storage_dir) or Path(storage_dir)
+    files = scan_storage(storage_path)
     console.print(f"Found {len(files)} files")
+
+    export_index = None
+    if export_json:
+        export_index = load_zotero_export(Path(export_json).expanduser())
+
     for p in files[: max(0, limit)]:
-        console.print(str(p))
+        if export_index:
+            akey = attachment_key_from_storage_path(file_path=p, storage_dir=storage_path)
+            meta = export_index.metadata_for_attachment(akey) if akey else {}
+            title = meta.get("title") or ""
+            year = meta.get("year") or ""
+            citekey = meta.get("citekey") or ""
+            suffix = " ".join([s for s in [str(year), str(citekey), str(title)] if str(s).strip()])
+            if suffix:
+                console.print(f"{p}  [dim]{suffix}[/dim]")
+            else:
+                console.print(str(p))
+        else:
+            console.print(str(p))
 
 
 @app.command()
 def index(
     storage_dir: str = typer.Option(..., help="Path to Zotero storage/ folder"),
     limit: int | None = typer.Option(None, help="Index only first N files (debug)"),
+    continue_on_error: bool = typer.Option(True, help="Continue if a file fails to index"),
+    export_json: str | None = typer.Option(
+        None, help="Path to Zotero/BetterBibTeX JSON export for metadata"
+    ),
 ) -> None:
     cfg = load_config()
     embedder, backend = resolve_embeddings(
@@ -80,20 +114,70 @@ def index(
     )
     console.print(f"Embeddings backend: {backend}")
 
-    files = scan_storage(_as_path(storage_dir) or Path(storage_dir))
+    storage_path = _as_path(storage_dir) or Path(storage_dir)
+    console.print("Scanning storage...")
+    files = scan_storage(storage_path)
     if limit is not None:
         files = files[: max(0, int(limit))]
+    console.print(f"Found {len(files)} files")
+    if not files:
+        raise typer.Exit(code=0)
 
-    results = index_files(
-        files=files,
-        chroma_dir=cfg.chroma_path(),
-        collection_name=cfg.chroma_collection,
-        embedder=embedder,
-        chunk_size=cfg.chunk_size,
-        chunk_overlap=cfg.chunk_overlap,
-    )
+    collection = get_collection(chroma_dir=cfg.chroma_path(), name=cfg.chroma_collection)
+
+    export_index = None
+    if export_json:
+        console.print("Loading Zotero export metadata...")
+        export_index = load_zotero_export(Path(export_json).expanduser())
+
+    results = []
+    failed = 0
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Indexing", total=len(files))
+
+        for path in files:
+            progress.update(task, description=f"Indexing {path.name}")
+
+            extra_metadata = None
+            if export_index:
+                akey = attachment_key_from_storage_path(file_path=path, storage_dir=storage_path)
+                extra_metadata = export_index.metadata_for_attachment(akey) if akey else None
+
+            def status(msg: str, p: Path = path) -> None:
+                progress.console.log(f"[dim]{p.name}[/dim]: {msg}")
+
+            try:
+                results.append(
+                    index_file(
+                        path=path,
+                        collection=collection,
+                        embedder=embedder,
+                        chunk_size=cfg.chunk_size,
+                        chunk_overlap=cfg.chunk_overlap,
+                        extra_metadata=extra_metadata,
+                        status=status,
+                    )
+                )
+            except Exception as exc:
+                failed += 1
+                progress.console.log(f"[red]{path.name}[/red]: failed ({exc})")
+                if not continue_on_error:
+                    raise
+            finally:
+                progress.advance(task)
+
     total_chunks = sum(r.chunks_added for r in results)
-    console.print(f"Indexed {len(results)} files, added {total_chunks} chunks")
+    console.print(
+        f"Indexed {len(results)} files, added {total_chunks} chunks"
+        + (f", {failed} failed" if failed else "")
+    )
 
 
 @app.command()
@@ -118,14 +202,18 @@ def query(
 
     table = Table(title="Top matches")
     table.add_column("Score", justify="right")
+    table.add_column("Title")
+    table.add_column("Year", justify="right")
     table.add_column("Source")
     table.add_column("Page", justify="right")
     table.add_column("Snippet")
     for r in results:
+        title = str(r.metadata.get("title") or "")
+        year = str(r.metadata.get("year") or "")
         source = str(r.metadata.get("source_path", ""))
         page = str(r.metadata.get("page", ""))
         snippet = r.document.replace("\n", " ").strip()
-        if len(snippet) > 160:
-            snippet = snippet[:157] + "..."
-        table.add_row(f"{r.score:.3f}", source, page, snippet)
+        if len(snippet) > 300:
+            snippet = snippet[:297] + "..."
+        table.add_row(f"{r.score:.3f}", title, year, source, page, snippet)
     console.print(table)

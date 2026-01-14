@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import sys
 
 import typer
@@ -69,21 +70,56 @@ def doctor(
 @app.command()
 def scan(
     storage_dir: str = typer.Option(..., help="Path to Zotero storage/ folder"),
-    limit: int = typer.Option(50, help="Max files to print"),
+    limit: int = typer.Option(1000, help="Max files to print"),
     export_json: str | None = typer.Option(
         None, help="Path to Zotero/BetterBibTeX JSON export for metadata"
     ),
+    json_output: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
 ) -> None:
     storage_path = _as_path(storage_dir) or Path(storage_dir)
     files = scan_storage(storage_path)
-    console.print(f"Found {len(files)} files")
 
     export_index = None
+    export_stats = None
     if export_json:
         export_index = load_zotero_export(Path(export_json).expanduser())
+        export_stats = {
+            "items": len(export_index.items_by_key),
+            "attachment_links": len(export_index.attachment_to_parent),
+        }
+
+    if json_output:
+        rows: list[dict] = []
+        for p in files[: max(0, limit)]:
+            akey = None
+            meta = None
+            if export_index:
+                akey = attachment_key_from_storage_path(file_path=p, storage_dir=storage_path)
+                meta = export_index.metadata_for_attachment(akey) if akey else None
+            rows.append(
+                {
+                    "path": str(p),
+                    "attachment_key": akey,
+                    "metadata": meta or {},
+                }
+            )
+        print(
+            json.dumps(
+                {
+                    "storage_dir": str(storage_path),
+                    "files_total": len(files),
+                    "files": rows,
+                    "export": export_stats or {},
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
+
+    console.print(f"Found {len(files)} files")
+    if export_stats:
         console.print(
-            f"Loaded export: {len(export_index.items_by_key)} items, "
-            f"{len(export_index.attachment_to_parent)} attachment links"
+            f"Loaded export: {export_stats['items']} items, {export_stats['attachment_links']} attachment links"
         )
 
         sample = files[: min(len(files), 50)]
@@ -207,7 +243,8 @@ def index(
 @app.command()
 def query(
     q: str = typer.Argument(..., help="Query text"),
-    n: int = typer.Option(5, help="Number of results"),
+    n: int = typer.Option(7, help="Number of results"),
+    json_output: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
 ) -> None:
     cfg = load_config()
     embedder, backend = resolve_embeddings(
@@ -218,6 +255,31 @@ def query(
     collection = get_collection(chroma_dir=cfg.chroma_path(), name=cfg.chroma_collection)
     q_emb = embedder.embed_query(q)
     results = query_collection(collection, q_emb, n_results=n)
+
+    if json_output:
+        print(
+            json.dumps(
+                {
+                    "backend": backend,
+                    "query": q,
+                    "n": n,
+                    "results": [
+                        {
+                            "score": r.score,
+                            "title": r.metadata.get("title") or "",
+                            "year": r.metadata.get("year") or "",
+                            "source_path": r.metadata.get("source_path") or "",
+                            "page": r.metadata.get("page") or "",
+                            "snippet": (r.document or "").replace("\n", " ").strip()[:300],
+                            "metadata": r.metadata,
+                        }
+                        for r in results
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
 
     console.print(f"Embeddings backend: {backend}")
     if not results:

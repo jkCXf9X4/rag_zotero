@@ -18,9 +18,8 @@ if command -v rag-zotero >/dev/null 2>&1; then
   fi
 else
   if [[ -n "$EXPORT_JSON" ]]; then
-    python3 -m rag_zotero.cli scan --json --storage-dir "$STORAGE_DIR" --export-json "$EXPORT_JSON" --limit "$LIMIT"
+    python3 -m rag_zotero scan --json --storage-dir "$STORAGE_DIR" --export-json "$EXPORT_JSON" --limit "$LIMIT"
   else
-    python3 -m rag_zotero.cli scan --json --storage-dir "$STORAGE_DIR" --limit "$LIMIT"
+    python3 -m rag_zotero scan --json --storage-dir "$STORAGE_DIR" --limit "$LIMIT"
   fi
 fi
-

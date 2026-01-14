@@ -57,6 +57,16 @@ rag-zotero query "What is temporal independence in co-simulation?"
 - `rag-zotero index --storage-dir ...`: extract + chunk + embed + store.
 - `rag-zotero query "...":` semantic search against the index.
 
+## Codex CLI skill (optional)
+
+To let Codex CLI call the search commands as a skill (scan/query), install the bundled skill into your Codex home:
+
+```bash
+rm -rf ~/.codex/skills/rag-zotero && mkdir -p ~/.codex/skills/rag-zotero && cp -r codex_skills/rag-zotero/* ~/.codex/skills/rag-zotero/  && chmod +x ~/.codex/skills/rag-zotero/scripts/*.sh
+```
+
+Restart Codex CLI (or start a new session). You can then ask for `$rag-zotero` to run `scan` / `query` and return JSON using `--json`.
+
 ## Notes / limitations
 
 - This scans *files* in Zotero `storage/` and doesn’t (yet) resolve Zotero item metadata (titles, authors, collections).

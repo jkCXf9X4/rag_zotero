@@ -1,6 +1,6 @@
 ---
 name: rag-zotero
-description: Use when you need to search a local Zotero storage folder using this repo's rag-zotero CLI (scan/index/query) and return results (prefer --json for agent-readable output).
+description: Use when you need to search an already-indexed Zotero library using this repo's rag-zotero CLI (scan/query) and return results (prefer --json for agent-readable output).
 ---
 
 # rag-zotero (Codex CLI skill)
@@ -14,11 +14,12 @@ Use this when the user asks to:
 ## Commands (agent-friendly)
 
 Prefer machine-readable output flags:
+- `rag-zotero scan --json --storage-dir ... --export-json ... --limit 50`
 - `rag-zotero query --json "..." --n 10`
 
 If `rag-zotero` is not on `PATH`, run via module:
-- `python3 -m rag_zotero.cli scan ...`
-- `python3 -m rag_zotero.cli query ...`
+- `python3 -m rag_zotero scan ...`
+- `python3 -m rag_zotero query ...`
 
 ## Typical workflows
 
@@ -30,4 +31,3 @@ If `rag-zotero` is not on `PATH`, run via module:
 ### Diagnose missing metadata matches
 - Run `rag-zotero scan --storage-dir ... --export-json ...  --json` (human output includes a warning if no matches).
 - If matches are zero, request a different export format: Zotero JSON or BetterBibTeX JSON (not CSL/bibliography JSON).
-

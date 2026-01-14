@@ -12,10 +12,6 @@ dependencies = [
   "pymupdf>=1.23",
   "chromadb>=0.5.0",
   "openai>=1.30.0",
-]
-
-[project.optional-dependencies]
-local-embeddings = [
   "sentence-transformers>=2.6.0",
 ]
 
@@ -31,4 +27,3 @@ packages = ["rag_zotero"]
 
 [tool.ruff]
 line-length = 100
-

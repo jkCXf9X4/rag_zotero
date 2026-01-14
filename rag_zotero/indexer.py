@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import hashlib
 from collections.abc import Callable
+from typing import Any
 
 from .extract import extract_any
 from .text_chunking import chunk_text
@@ -19,6 +20,27 @@ class IndexedFile:
 def _chunk_id(*, source_path: str, page: int, chunk_index: int) -> str:
     raw = f"{source_path}::p{page}::c{chunk_index}".encode("utf-8")
     return hashlib.sha1(raw).hexdigest()
+
+
+def _sanitize_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    if not metadata:
+        return {}
+    out: dict[str, Any] = {}
+    for k, v in metadata.items():
+        if v is None:
+            continue
+        key = str(k)
+        if isinstance(v, (str, int, float, bool)):
+            out[key] = v
+            continue
+        if isinstance(v, (list, tuple, set)):
+            values = [x for x in v if x is not None]
+            if not values:
+                continue
+            out[key] = "; ".join(str(x) for x in values)
+            continue
+        out[key] = str(v)
+    return out
 
 
 def index_file(
@@ -41,6 +63,7 @@ def index_file(
 
     if status:
         status("Chunking")
+    sanitized_extra_metadata = _sanitize_metadata(extra_metadata)
     for page in pages:
         chunks = chunk_text(page.text, chunk_size=chunk_size, overlap=chunk_overlap)
         for chunk_index, chunk in enumerate(chunks):
@@ -57,7 +80,7 @@ def index_file(
                     "source_path": str(path),
                     "page": page.page_number,
                     "chunk": chunk_index,
-                    **(extra_metadata or {}),
+                    **sanitized_extra_metadata,
                 }
             )
 

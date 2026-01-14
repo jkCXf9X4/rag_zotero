@@ -81,6 +81,26 @@ def scan(
     export_index = None
     if export_json:
         export_index = load_zotero_export(Path(export_json).expanduser())
+        console.print(
+            f"Loaded export: {len(export_index.items_by_key)} items, "
+            f"{len(export_index.attachment_to_parent)} attachment links"
+        )
+
+        sample = files[: min(len(files), 50)]
+        matched = 0
+        for p in sample:
+            akey = attachment_key_from_storage_path(file_path=p, storage_dir=storage_path)
+            if not akey:
+                continue
+            meta = export_index.metadata_for_attachment(akey)
+            if any(meta.get(k) for k in ("title", "year", "doi", "url", "citekey")):
+                matched += 1
+        if sample and matched == 0:
+            console.print(
+                "[yellow]No attachment metadata matched scanned files.[/yellow] "
+                "Ensure you exported a full library as Zotero JSON or BetterBibTeX JSON "
+                "(not CSL JSON/bibliography exports, which typically lack attachment keys)."
+            )
 
     for p in files[: max(0, limit)]:
         if export_index:
@@ -91,7 +111,7 @@ def scan(
             citekey = meta.get("citekey") or ""
             suffix = " ".join([s for s in [str(year), str(citekey), str(title)] if str(s).strip()])
             if suffix:
-                console.print(f"{p}  [dim]{suffix}[/dim]")
+                console.print(f"{suffix} [dim]'{p}'[/dim]")
             else:
                 console.print(str(p))
         else:
@@ -129,6 +149,10 @@ def index(
     if export_json:
         console.print("Loading Zotero export metadata...")
         export_index = load_zotero_export(Path(export_json).expanduser())
+        console.print(
+            f"Loaded export: {len(export_index.items_by_key)} items, "
+            f"{len(export_index.attachment_to_parent)} attachment links"
+        )
 
     results = []
     failed = 0
@@ -208,12 +232,14 @@ def query(
     table.add_column("Page", justify="right")
     table.add_column("Snippet")
     for r in results:
-        title = str(r.metadata.get("title") or "")
+        title = r.metadata.get("title", '')
+        creators = r.metadata.get("creators", '')
+        title_text = f"{title}\nCreators: {creators}"
         year = str(r.metadata.get("year") or "")
         source = str(r.metadata.get("source_path", ""))
         page = str(r.metadata.get("page", ""))
         snippet = r.document.replace("\n", " ").strip()
         if len(snippet) > 300:
             snippet = snippet[:297] + "..."
-        table.add_row(f"{r.score:.3f}", title, year, source, page, snippet)
+        table.add_row(f"{r.score:.3f}", title_text, year, source, page, snippet)
     console.print(table)

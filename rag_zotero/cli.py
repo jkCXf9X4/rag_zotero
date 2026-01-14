@@ -301,7 +301,5 @@ def query(
         source = str(r.metadata.get("source_path", ""))
         page = str(r.metadata.get("page", ""))
         snippet = r.document.replace("\n", " ").strip()
-        if len(snippet) > 300:
-            snippet = snippet[:297] + "..."
         table.add_row(f"{r.score:.3f}", title_text, year, source, page, snippet)
     console.print(table)

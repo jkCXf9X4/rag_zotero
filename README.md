@@ -23,6 +23,8 @@ python -m pip install -e .
 Copy `.env.example` to `.env` and set at least:
 - `OPENAI_API_KEY` (recommended), or install local embeddings extra.
 
+`rag-zotero` loads `.env` from your current working directory. If you want to keep an env file elsewhere, set `RAG_ZOTERO_ENV_FILE=/path/to/.env`. By default, variables already set in your shell take precedence over `.env`; set `RAG_ZOTERO_DOTENV_OVERRIDE=1` to force `.env` to override.
+
 ### 3) Index your Zotero PDFs
 
 Point at your Zotero `storage/` directory (example paths):

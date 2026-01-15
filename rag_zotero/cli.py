@@ -270,7 +270,7 @@ def query(
                             "year": r.metadata.get("year") or "",
                             "source_path": r.metadata.get("source_path") or "",
                             "page": r.metadata.get("page") or "",
-                            "snippet": (r.document or "").replace("\n", " ").strip()[:300],
+                            "text": (r.document or "").replace("\n", " ").strip(),
                             "metadata": r.metadata,
                         }
                         for r in results
@@ -292,7 +292,7 @@ def query(
     table.add_column("Year", justify="right")
     table.add_column("Source")
     table.add_column("Page", justify="right")
-    table.add_column("Snippet")
+    table.add_column("Text")
     for r in results:
         title = r.metadata.get("title", '')
         creators = r.metadata.get("creators", '')
@@ -300,6 +300,6 @@ def query(
         year = str(r.metadata.get("year") or "")
         source = str(r.metadata.get("source_path", ""))
         page = str(r.metadata.get("page", ""))
-        snippet = r.document.replace("\n", " ").strip()
-        table.add_row(f"{r.score:.3f}", title_text, year, source, page, snippet)
+        text = str((r.document or "").replace("\n", " ").strip())
+        table.add_row(f"{r.score:.3f}", title_text, year, source, page, text)
     console.print(table)

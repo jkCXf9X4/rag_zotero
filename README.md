@@ -2,6 +2,9 @@
 
 Index academic PDFs (typically stored in Zotero’s local `storage/`) into a local vector DB and query them using embeddings.
 
+Example:
+![](Figures/query_screenshot.png)
+
 This repo intentionally starts minimal:
 - **Source**: local Zotero storage folder (PDFs / text files).
 - **Index**: local persistent Chroma DB in `./data/chroma/`.

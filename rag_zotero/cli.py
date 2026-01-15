@@ -286,7 +286,7 @@ def query(
         console.print("No results.")
         raise typer.Exit(code=0)
 
-    table = Table(title="Top matches")
+    table = Table(title="Top matches", show_lines=True)
     table.add_column("Score", justify="right")
     table.add_column("Title")
     table.add_column("Year", justify="right")

@@ -288,18 +288,16 @@ def query(
 
     table = Table(title="Top matches", show_lines=True)
     table.add_column("Score", justify="right")
-    table.add_column("Title")
-    table.add_column("Year", justify="right")
-    table.add_column("Source")
-    table.add_column("Page", justify="right")
+    table.add_column("Info")
     table.add_column("Text")
     for r in results:
-        title = r.metadata.get("title", '')
-        creators = r.metadata.get("creators", '')
-        title_text = f"{title}\nCreators: {creators}"
-        year = str(r.metadata.get("year") or "")
-        source = str(r.metadata.get("source_path", ""))
-        page = str(r.metadata.get("page", ""))
+        info = f"""Title: {r.metadata.get('title', '')}
+Year: {r.metadata.get('year') or ''}
+Page: {r.metadata.get("page", "")}
+Writers: {r.metadata.get('creators' '')}
+Key: {r.metadata.get("citekey", "")}
+
+"""
         text = str((r.document or "").replace("\n", " ").strip())
-        table.add_row(f"{r.score:.3f}", title_text, year, source, page, text)
+        table.add_row(f"{r.score:.3f}", info, text)
     console.print(table)

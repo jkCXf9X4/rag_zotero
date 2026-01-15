@@ -25,6 +25,11 @@ class AppConfig(BaseModel):
         default_factory=lambda: os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
     )
 
+    openrouter_api_key: str | None = Field(default_factory=lambda: os.getenv("OPENROUTER_API_KEY") or None)
+    openrouter_eval_model: str = Field(
+        default_factory=lambda: os.getenv("OPENROUTER_EVAL_MODEL", "openai/gpt-4o-mini")
+    )
+
     chunk_size: int = Field(default_factory=lambda: _env_int("CHUNK_SIZE", 1200))
     chunk_overlap: int = Field(default_factory=lambda: _env_int("CHUNK_OVERLAP", 200))
 

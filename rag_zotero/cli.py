@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import sys
+import textwrap
 
 import typer
 from rich.console import Console
@@ -245,6 +246,16 @@ def query(
     q: str = typer.Argument(..., help="Query text"),
     n: int = typer.Option(7, help="Number of results"),
     json_output: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    eval: bool = typer.Option(
+        False,
+        "--eval",
+        help="Use an OpenRouter LLM to evaluate how well each result answers the query",
+    ),
+    eval_model: str | None = typer.Option(
+        None,
+        help="OpenRouter model id (defaults to OPENROUTER_EVAL_MODEL)",
+    ),
+    eval_top_k: int = typer.Option(5, help="Evaluate only the top K results"),
 ) -> None:
     cfg = load_config()
     embedder, backend = resolve_embeddings(
@@ -256,6 +267,43 @@ def query(
     q_emb = embedder.embed_query(q)
     results = query_collection(collection, q_emb, n_results=n)
 
+    eval_report = None
+    eval_by_idx = {}
+    eval_error = None
+    if eval and results:
+        if not cfg.openrouter_api_key:
+            raise typer.BadParameter(
+                "Missing OPENROUTER_API_KEY (required when using --eval).",
+                param_hint="--eval",
+            )
+        from .llm_eval import evaluate_relevance_openrouter
+
+        k = max(0, min(eval_top_k, len(results)))
+        candidates = []
+        for idx, r in enumerate(results[:k]):
+            candidates.append(
+                {
+                    "idx": idx,
+                    "title": r.metadata.get("title") or "",
+                    "year": r.metadata.get("year") or "",
+                    "page": r.metadata.get("page") or "",
+                    "source_path": r.metadata.get("source_path") or "",
+                    "text": (r.document or "")[:3000],
+                }
+            )
+        try:
+            eval_report = evaluate_relevance_openrouter(
+                api_key=cfg.openrouter_api_key,
+                model=eval_model or cfg.openrouter_eval_model,
+                query=q,
+                candidates=candidates,
+            )
+            eval_by_idx = {item.idx: item for item in eval_report.items}
+        except Exception as exc:
+            eval_error = str(exc)
+            if not json_output:
+                console.print(f"[yellow]LLM evaluation failed:[/yellow] {exc}")
+
     if json_output:
         print(
             json.dumps(
@@ -263,6 +311,23 @@ def query(
                     "backend": backend,
                     "query": q,
                     "n": n,
+                    "evaluation_error": eval_error,
+                    "evaluation": (
+                        {
+                            "provider": eval_report.provider,
+                            "model": eval_report.model,
+                            "items": [
+                                {
+                                    "idx": item.idx,
+                                    "score": item.score,
+                                    "rationale": item.rationale,
+                                }
+                                for item in eval_report.items
+                            ],
+                        }
+                        if eval_report
+                        else None
+                    ),
                     "results": [
                         {
                             "score": r.score,
@@ -271,9 +336,15 @@ def query(
                             "source_path": r.metadata.get("source_path") or "",
                             "page": r.metadata.get("page") or "",
                             "text": (r.document or "").replace("\n", " ").strip(),
+                            "eval_score": (
+                                eval_by_idx.get(i).score if eval_by_idx.get(i) else None
+                            ),
+                            "eval_rationale": (
+                                eval_by_idx.get(i).rationale if eval_by_idx.get(i) else None
+                            ),
                             "metadata": r.metadata,
                         }
-                        for r in results
+                        for i, r in enumerate(results)
                     ],
                 },
                 ensure_ascii=False,
@@ -290,7 +361,7 @@ def query(
     table.add_column("Score", justify="right")
     table.add_column("Info")
     table.add_column("Text")
-    for r in results:
+    for i, r in enumerate(results):
         info = f"""Title: {r.metadata.get('title', '')}
 Year: {r.metadata.get('year') or ''}
 Page: {r.metadata.get("page", "")}
@@ -298,6 +369,9 @@ Writers: {r.metadata.get('creators' '')}
 Key: {r.metadata.get("citekey", "")}
 
 """
+        if eval_report and (item := eval_by_idx.get(i)):
+            rationale = textwrap.shorten(item.rationale, width=160, placeholder="…")
+            info += f"LLM relevance: {item.score:.2f}\nLLM: {rationale}\n"
         text = str((r.document or "").replace("\n", " ").strip())
         table.add_row(f"{r.score:.3f}", info, text)
     console.print(table)

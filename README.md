@@ -5,11 +5,6 @@ Index academic PDFs (typically stored in Zotero’s local `storage/`) into a loc
 Example:
 ![](Figures/query_screenshot.png)
 
-This repo intentionally starts minimal:
-- **Source**: local Zotero storage folder (PDFs / text files).
-- **Index**: local persistent Chroma DB in `./data/chroma/`.
-- **Embeddings**: OpenAI by default; optional local embeddings via `sentence-transformers`.
-
 ## Quickstart
 
 ### 1) Create a venv + install
@@ -18,13 +13,14 @@ This repo intentionally starts minimal:
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -e .
+python -m pip install git+https://github.com/jkCXf9X4/rag_zotero
 ```
 
 ### 2) Configure
 
-Copy `.env.example` to `.env` and set at least:
-- `OPENAI_API_KEY` (recommended), or install local embeddings extra.
+Place the .env file in the directory that you are using to query the database
+
+Copy `.env.example` to `.env` and optionally set `OPENAI_API_KEY` (leave blank for local embeddings).
 
 `rag-zotero` loads `.env` from your current working directory. If you want to keep an env file elsewhere, set `RAG_ZOTERO_ENV_FILE=/path/to/.env`. By default, variables already set in your shell take precedence over `.env`; set `RAG_ZOTERO_DOTENV_OVERRIDE=1` to force `.env` to override.
 
@@ -74,5 +70,10 @@ Restart Codex CLI (or start a new session). You can then ask for `$rag-zotero` t
 
 ## Notes / limitations
 
-- This scans *files* in Zotero `storage/` and doesn’t (yet) resolve Zotero item metadata (titles, authors, collections).
 - PDFs that are image-only (no text layer) will extract poorly; OCR can be added later.
+
+
+To install local
+```bash
+python -m pip install -e .
+```

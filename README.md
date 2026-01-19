@@ -51,6 +51,17 @@ This will store metadata like `title`, `creators`, `year`, `doi`, and `citekey` 
 rag-zotero query "What is temporal independence in co-simulation?"
 ```
 
+#### Optional: LLM-based relevance evaluation (OpenRouter)
+
+Set `OPENROUTER_API_KEY` (and optionally `OPENROUTER_EVAL_MODEL`) and run:
+
+```bash
+rag-zotero query --eval "What is temporal independence in co-simulation?"
+```
+
+If you’re behind a corporate TLS proxy and see SSL connection errors, set `SSL_CERT_FILE` to your
+CA bundle (recommended) or use `--eval-insecure` as a last resort.
+
 ## Commands
 
 - `rag-zotero doctor`: show config, verify dependencies (use `--live` to do an actual embedding call).

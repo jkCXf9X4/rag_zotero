@@ -255,7 +255,11 @@ def query(
         None,
         help="OpenRouter model id (defaults to OPENROUTER_EVAL_MODEL)",
     ),
-    eval_top_k: int = typer.Option(5, help="Evaluate only the top K results"),
+    eval_insecure: bool = typer.Option(
+        False,
+        "--insecure",
+        help="Disable TLS verification for OpenRouter (use only behind corporate proxies)",
+    ),
 ) -> None:
     cfg = load_config()
     embedder, backend = resolve_embeddings(
@@ -278,9 +282,8 @@ def query(
             )
         from .llm_eval import evaluate_relevance_openrouter
 
-        k = max(0, min(eval_top_k, len(results)))
         candidates = []
-        for idx, r in enumerate(results[:k]):
+        for idx, r in enumerate(results):
             candidates.append(
                 {
                     "idx": idx,
@@ -288,7 +291,7 @@ def query(
                     "year": r.metadata.get("year") or "",
                     "page": r.metadata.get("page") or "",
                     "source_path": r.metadata.get("source_path") or "",
-                    "text": (r.document or "")[:3000],
+                    "text": (r.document or "")[:5000],
                 }
             )
         try:
@@ -297,12 +300,17 @@ def query(
                 model=eval_model or cfg.openrouter_eval_model,
                 query=q,
                 candidates=candidates,
+                insecure=eval_insecure,
             )
             eval_by_idx = {item.idx: item for item in eval_report.items}
         except Exception as exc:
             eval_error = str(exc)
             if not json_output:
                 console.print(f"[yellow]LLM evaluation failed:[/yellow] {exc}")
+                console.print(
+                    "[dim]If this is an SSL/proxy issue, try setting SSL_CERT_FILE to your "
+                    "corporate CA bundle, or rerun with --eval-insecure.[/dim]"
+                )
 
     if json_output:
         print(
@@ -348,6 +356,7 @@ def query(
                     ],
                 },
                 ensure_ascii=False,
+                indent=2,
             )
         )
         return
@@ -370,7 +379,7 @@ Key: {r.metadata.get("citekey", "")}
 
 """
         if eval_report and (item := eval_by_idx.get(i)):
-            rationale = textwrap.shorten(item.rationale, width=160, placeholder="…")
+            rationale = item.rationale
             info += f"LLM relevance: {item.score:.2f}\nLLM: {rationale}\n"
         text = str((r.document or "").replace("\n", " ").strip())
         table.add_row(f"{r.score:.3f}", info, text)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,15 +37,27 @@ def evaluate_relevance_openrouter(
     model: str,
     query: str,
     candidates: list[dict[str, Any]],
+    insecure: bool = False,
+    timeout_s: float = 30.0,
 ) -> EvalReport:
     from openai import OpenAI
+
+    http_client = None
+    if insecure:
+        import httpx
+
+        http_client = httpx.Client(verify=False, timeout=timeout_s)
+
+    headers = {"X-Title": os.getenv("OPENROUTER_APP_NAME", "rag-zotero")}
+    if referer := (os.getenv("OPENROUTER_HTTP_REFERER") or "").strip():
+        headers["HTTP-Referer"] = referer
 
     client = OpenAI(
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "X-Title": "rag-zotero",
-        },
+        default_headers=headers,
+        timeout=timeout_s,
+        http_client=http_client,
     )
 
     system = (
@@ -53,7 +66,7 @@ def evaluate_relevance_openrouter(
         "answer the query.\n"
         "Return ONLY valid JSON (no markdown) with schema:\n"
         '{ "items": [ { "idx": <int>, "score": <float 0..1>, "rationale": <string> } ] }\n'
-        "Use score ~1.0 for directly answering, ~0.5 for tangentially useful, ~0.0 for irrelevant."
+        "The score result should map against the following scale: ~1.0 for directly answering, ~0.5 for tangentially useful, ~0.0 for irrelevant."
     )
     user = {
         "query": query,
@@ -66,6 +79,7 @@ def evaluate_relevance_openrouter(
             {"role": "system", "content": system},
             {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
         ],
+        # extra_body={"reasoning": {"enabled": True}},
         temperature=0,
         max_tokens=800,
     )
@@ -85,4 +99,3 @@ def evaluate_relevance_openrouter(
         items.append(EvalItem(idx=idx, score=score, rationale=rationale))
 
     return EvalReport(provider="openrouter", model=model, items=items)
-

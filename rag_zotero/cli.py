@@ -48,6 +48,7 @@ def doctor(
         embedder, backend = resolve_embeddings(
             openai_api_key=cfg.openai_api_key,
             openai_model=cfg.openai_embed_model,
+            sentence_transformers_model=cfg.sentence_transformers_model,
         )
         embed_ok = True
         if live:
@@ -64,6 +65,7 @@ def doctor(
     table.add_row("Chroma dir", str(chroma_dir))
     table.add_row("Collection", cfg.chroma_collection)
     table.add_row("Embeddings", backend)
+    table.add_row("Local embed model", cfg.sentence_transformers_model)
     table.add_row("Embeddings OK", str(embed_ok))
     console.print(table)
 
@@ -157,17 +159,18 @@ def scan(
 
 @app.command()
 def index(
-    storage_dir: str = typer.Option(..., help="Path to Zotero storage/ folder"),
+    storage_dir: str = typer.Option(default="~/Zotero/storage", help="Path to Zotero storage/ folder", ),
     limit: int | None = typer.Option(None, help="Index only first N files (debug)"),
     continue_on_error: bool = typer.Option(True, help="Continue if a file fails to index"),
     export_json: str | None = typer.Option(
-        None, help="Path to Zotero/BetterBibTeX JSON export for metadata"
+        default="~/Zotero/My Library.json", help="Path to Zotero/BetterBibTeX JSON export for metadata", 
     ),
 ) -> None:
     cfg = load_config()
     embedder, backend = resolve_embeddings(
         openai_api_key=cfg.openai_api_key,
         openai_model=cfg.openai_embed_model,
+        sentence_transformers_model=cfg.sentence_transformers_model,
     )
     console.print(f"Embeddings backend: {backend}")
 
@@ -183,9 +186,11 @@ def index(
     collection = get_collection(chroma_dir=cfg.chroma_path(), name=cfg.chroma_collection)
 
     export_index = None
-    if export_json:
+    export_json_file = Path(export_json)
+
+    if export_json_file.exists() :
         console.print("Loading Zotero export metadata...")
-        export_index = load_zotero_export(Path(export_json).expanduser())
+        export_index = load_zotero_export(export_json_file.expanduser())
         console.print(
             f"Loaded export: {len(export_index.items_by_key)} items, "
             f"{len(export_index.attachment_to_parent)} attachment links"
@@ -257,18 +262,24 @@ def query(
     ),
     eval_insecure: bool = typer.Option(
         False,
+        "--eval-insecure",
         "--insecure",
         help="Disable TLS verification for OpenRouter (use only behind corporate proxies)",
     ),
 ) -> None:
     cfg = load_config()
-    embedder, backend = resolve_embeddings(
-        openai_api_key=cfg.openai_api_key,
-        openai_model=cfg.openai_embed_model,
-    )
+    try:
+        embedder, backend = resolve_embeddings(
+            openai_api_key=cfg.openai_api_key,
+            openai_model=cfg.openai_embed_model,
+            sentence_transformers_model=cfg.sentence_transformers_model,
+        )
+        q_emb = embedder.embed_query(q)
+    except Exception as exc:
+        console.print(f"[red]Embeddings not ready:[/red] {exc}")
+        raise typer.Exit(code=1)
 
     collection = get_collection(chroma_dir=cfg.chroma_path(), name=cfg.chroma_collection)
-    q_emb = embedder.embed_query(q)
     results = query_collection(collection, q_emb, n_results=n)
 
     eval_report = None

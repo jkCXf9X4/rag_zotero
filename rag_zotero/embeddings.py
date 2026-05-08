@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 
@@ -30,12 +31,21 @@ class OpenAIEmbeddings:
 
 @dataclass
 class SentenceTransformersEmbeddings:
-    model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    model_name: str
 
     def _model(self):
         from sentence_transformers import SentenceTransformer
 
-        return SentenceTransformer(self.model_name)
+        try:
+            return SentenceTransformer(self.model_name)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load local embedding model '{self.model_name}'. "
+                "This usually means the model is not cached and the Hugging Face download "
+                "failed. Set SENTENCE_TRANSFORMERS_MODEL in .env to choose a different local "
+                "model. If this machine uses a corporate TLS proxy, set SSL_CERT_FILE to the "
+                "appropriate CA bundle. Otherwise, set OPENAI_API_KEY to use OpenAI embeddings."
+            ) from exc
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         model = self._model()
@@ -46,7 +56,12 @@ class SentenceTransformersEmbeddings:
         return self.embed_texts([query])[0]
 
 
-def resolve_embeddings(*, openai_api_key: str | None, openai_model: str):
+def resolve_embeddings(
+    *,
+    openai_api_key: str | None,
+    openai_model: str,
+    sentence_transformers_model: str,
+):
     if openai_api_key:
         return OpenAIEmbeddings(api_key=openai_api_key, model=openai_model), "openai"
 
@@ -58,5 +73,21 @@ def resolve_embeddings(*, openai_api_key: str | None, openai_model: str):
             "- Option A (recommended): set OPENAI_API_KEY in .env\n"
             "- Option B (local): `pip install -e '.[local-embeddings]'`\n"
         ) from exc
-    return SentenceTransformersEmbeddings(), "sentence-transformers"
+    return (
+        SentenceTransformersEmbeddings(
+            model_name=_resolve_sentence_transformers_model(sentence_transformers_model)
+        ),
+        "sentence-transformers",
+    )
 
+
+def _resolve_sentence_transformers_model(model_spec: str) -> str:
+    candidate = Path(model_spec).expanduser()
+    if candidate.exists():
+        if not candidate.is_dir():
+            raise RuntimeError(
+                f"Local embedding model path '{candidate}' must be a directory produced by "
+                "a Sentence Transformers download."
+            )
+        return str(candidate.resolve())
+    return model_spec

@@ -24,6 +24,11 @@ class AppConfig(BaseModel):
     openai_embed_model: str = Field(
         default_factory=lambda: os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
     )
+    sentence_transformers_model: str = Field(
+        default_factory=lambda: os.getenv(
+            "SENTENCE_TRANSFORMERS_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+        )
+    )
 
     openrouter_api_key: str | None = Field(default_factory=lambda: os.getenv("OPENROUTER_API_KEY") or None)
     openrouter_eval_model: str = Field(

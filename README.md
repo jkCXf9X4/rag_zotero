@@ -18,9 +18,26 @@ python -m pip install git+https://github.com/jkCXf9X4/rag_zotero
 
 ### 2) Configure
 
-Place the .env file in the directory that you are using to query the database
+Place the `.env` file in the directory that you are using to query the database.
 
 Copy `.env.example` to `.env` and optionally set `OPENAI_API_KEY` (leave blank for local embeddings).
+If you use local embeddings, set `SENTENCE_TRANSFORMERS_MODEL` to choose the model. A good
+drop-in replacement is `sentence-transformers/all-mpnet-base-v2`.
+You can also set `SENTENCE_TRANSFORMERS_MODEL` to a local directory downloaded with:
+
+```bash
+./scripts/download_sentence_transformer.sh sentence-transformers/all-mpnet-base-v2 ./models/all-mpnet-base-v2
+```
+
+If you are behind a corporate TLS proxy, set `SSL_CERT_FILE=/path/to/ca-bundle.pem` before
+running the download helper. As a last resort, you can pass `--insecure` to the helper to disable
+certificate verification for the Hugging Face download.
+
+Then point `.env` at that directory:
+
+```bash
+SENTENCE_TRANSFORMERS_MODEL=./models/all-mpnet-base-v2
+```
 
 `rag-zotero` loads `.env` from your current working directory. If you want to keep an env file elsewhere, set `RAG_ZOTERO_ENV_FILE=/path/to/.env`. By default, variables already set in your shell take precedence over `.env`; set `RAG_ZOTERO_DOTENV_OVERRIDE=1` to force `.env` to override.
 
@@ -60,7 +77,8 @@ rag-zotero query --eval "What is temporal independence in co-simulation?"
 ```
 
 If you’re behind a corporate TLS proxy and see SSL connection errors, set `SSL_CERT_FILE` to your
-CA bundle (recommended) or use `--eval-insecure` as a last resort.
+CA bundle (recommended) or use `--eval-insecure` as a last resort. The flag only applies when
+using `--eval`.
 
 ## Commands
 
